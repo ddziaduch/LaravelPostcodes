@@ -152,6 +152,18 @@ class PostcodeServiceTest extends TestCase
         $this->assertCount(1, $resultFound);
     }
 
+    public function testServiceCanGetPostcodes()
+    {
+        $postcodes = ["PR3 0SG", "M45 6GN", "EX165BL"];
+        $service = $this->service(200, json_encode(["status" => 200, "result" => [["query" => "PR3 0SG", "result" => ["postcode" => "PR3 0SG",],], ["query" => "M45 6GN", "result" => ["postcode" => "M45 6GN",],], ["query" => "EX165BL", "result" => ["postcode" => "EX16 5BL"]]]]));
+        $result = $service->getPostcodes($postcodes, ['postcode']);
+
+        $this->assertInstanceOf(\Illuminate\Support\Collection::class, $result);
+
+        $this->assertEquals($result->count(), 3);
+        $this->assertEquals($result->first()->postcode, $postcodes[0]);
+    }
+
     public function testServiceCanGetNearestOutwardCodesForGivenLongitudeAndLatitude()
     {
         $json = file_get_contents(
@@ -220,6 +232,15 @@ class PostcodeServiceTest extends TestCase
 
         $this->assertNull($actual);
         $this->assertRequest('POST', 'https://api.postcodes.io/postcodes', $expectedRequestBody);
+    }
+
+    public function testServiceCanGetNearestOutwardCode()
+    {
+        $service = $this->service(200, json_encode(['result' => [['outcode' => substr($this->postcode, 0, 3)]]]));
+        $result = $service->getNearestOutwardCode(substr($this->postcode, 0, 3));
+
+        $this->assertInstanceOf(\Illuminate\Support\Collection::class, $result);
+        $this->assertEquals($result->first()->outcode, substr($this->postcode, 0, 3));
     }
 
     private function service(int $status, string $body = null): PostcodeService

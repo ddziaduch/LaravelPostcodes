@@ -6,6 +6,7 @@ namespace JustSteveKing\LaravelPostcodes\Service;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
+use function GuzzleHttp\Psr7\build_query;
 use JustSteveKing\LaravelPostcodes\Service\BulkReverseGeocoding\Geolocation;
 
 class PostcodeService
@@ -59,6 +60,28 @@ class PostcodeService
     }
 
     /**
+     * Get the address details from a multiple postcodes at once
+     *
+     * @param array $postcodes
+     *
+     * @param array $filter - optional array of fields to return
+     * @return \Illuminate\Support\Collection
+     *
+     * @throws \GuzzleHttp\Exception\GuzzleException
+     */
+    public function getPostcodes(array $postcodes, array $filter = []): object
+    {
+        if (!empty($filter)) {
+            $filter = build_query(['filter' => implode(',', $filter)]);
+        }
+
+        return collect($this->getResponse('postcodes?' . $filter, 'POST', ['postcodes' => array_values($postcodes)]))
+            ->map(function ($item) {
+                return $item->result;
+            });
+    }
+
+    /**
      * Get information based on outward code including geo data
      *
      * @param string $outwardcode
@@ -83,7 +106,7 @@ class PostcodeService
     /**
      * Query the API for a given string
      *
-     * @param  string  $query
+     * @param string $query
      *
      * @return array|null
      */
@@ -162,26 +185,46 @@ class PostcodeService
     }
 
     /**
+     * Get information about nearest outcodes based on outward code
+     *
+     * @param string $outwardcode
+     *
+     * @param int $limit Needs to be less than 100
+     * @param int $radius Needs to be less than 25,000m
+     * @return object
+     *
+     * @throws \GuzzleHttp\Exception\GuzzleException
+     */
+    public function getNearestOutwardCode(string $outwardcode, int $limit = 10, int $radius = 5000): object
+    {
+        $limit = ($limit > 100) ? 100 : $limit;
+        $radius = ($radius > 100) ? 25000 : $radius;
+
+        return collect($this->getResponse("outcodes/$outwardcode/nearest?limit=$limit&radius=$radius"));
+    }
+
+    /**
      * Get the response and return the result object
      *
-     * @param string $uri
+     * @param string|null $uri
      * @param string $method
-     * @param string|null $body
-     *
+     * @param array $data - data to be sent in post/patch/put request
+     * @param array $options - array of options to be passed to curl, if $data is passed 'json' will be overwritten
      * @return mixed
-     * @throws GuzzleException
+     * @throws \GuzzleHttp\Exception\GuzzleException
      */
-    protected function getResponse(
-        string $uri = null,
-        string $method = 'GET',
-        string $body = null
-    ) {
+    protected function getResponse(string $uri = null, string $method = 'GET', array $data = [], array $options = [])
+    {
         $url = $this->url . $uri;
+
+        if (!empty($data)) {
+            $options['json'] = $data;
+        }
 
         $request = $this->http->request(
             $method,
             $url,
-            ['body' => $body]
+            $options
         );
 
         return json_decode($request->getBody()->getContents())->result;
